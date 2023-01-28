@@ -2,5 +2,8 @@ test*
 tmp*
 a.*
 
-# vsc
+# VSC
 .vscode
+
+# MacOS
+.DS_Store
