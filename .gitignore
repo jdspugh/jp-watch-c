@@ -1,0 +1,6 @@
+test*
+tmp*
+a.*
+
+# vsc
+.vscode
