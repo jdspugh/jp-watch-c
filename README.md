@@ -20,7 +20,7 @@ Linux (Ubuntu)
 $ cd ~
 $ git clone https://github.com/jdspugh/jp-watch.git
 $ cd jp-watch
-$ gcc -O3 -o jp-watch jp-watch-fsevents.c
+$ gcc -O3 -o jp-watch jp-watch-fanotify.c
 $ sudo mv jp-watch /usr/local/bin
 ```
 
