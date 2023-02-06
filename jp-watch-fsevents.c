@@ -24,10 +24,10 @@ static void callback(
   fflush(stdout);
 }
 
-void x(char *msg){puts(msg);exit(1);}// exit (with error msg)
+void die(char *msg) { puts(msg); exit(1); }// exit (with error msg)
 
 int main(int argc, char *argv[]) {
-    if(argc<2)x("Missing directory argument");
+    if (argc < 2) die("Missing directory argument");
 
     // This will check the path recursively and also keep track of new files/folders created within it.
     CFStringRef path=CFStringCreateWithCString(NULL,argv[1],kCFStringEncodingUTF8);
