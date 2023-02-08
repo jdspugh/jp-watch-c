@@ -1,12 +1,8 @@
 # jp-watch
 
-Minimalist app to efficiently watch a set of files and/or directories recursively for changes.
+Lightweight app to efficiently watch a set of files and/or directories recursively for changes on Linux and MacOS.
 
-# Why?
-
-Written for ```jp-sync``` because ```fswatch``` and ```inotify-tools``` didn't produce consistent results across platforms.
-
-# Installation & Usage
+# Installation
 
 MacOS
 ```
@@ -18,7 +14,7 @@ $ sudo mv jp-watch /usr/local/bin
 $ jp-watch --help
 ```
 
-Linux (Ubuntu)
+Linux
 ```
 $ cd ~
 $ git clone https://github.com/jdspugh/jp-watch.git
@@ -27,6 +23,27 @@ $ gcc -O3 -o jp-watch jp-watch-fanotify.c
 $ sudo mv jp-watch /usr/local/bin
 $ sudo jp-watch --help
 ```
+
+# Examples
+
+Watch the local directory
+```
+$ jp-watch .
+```
+
+Watch the whole drive
+```
+$ jp-watch /
+```
+
+Watch a few different files and directories with a combination of relative and absolute paths
+```
+$ jp-watch README.md jp-watch-fanotify.c /var/www /tmp
+```
+
+# Why?
+
+Written for ```jp-sync``` because ```fswatch``` and ```inotify-tools``` didn't produce consistent results across platforms.
 
 # Design Descisions
 
