@@ -1,6 +1,11 @@
-# jp-watch
+<div align="center">
+  <img style="height:80px" src="https://jdspugh.github.io/jp-watch.png" />
+  <h1>jp-watch</h1>
+</div>
 
-Lightweight app to efficiently watch a set of files and/or directories recursively for changes on Linux and MacOS.
+# About
+
+Lightweight, cross platform app to efficiently watch a set of files and/or directories recursively for changes on Linux and MacOS.
 
 # Installation
 
