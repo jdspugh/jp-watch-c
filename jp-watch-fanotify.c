@@ -1,50 +1,126 @@
-#define _GNU_SOURCE// required for open_by_handle_at()
+// Compile and Run
+//   Linux
+//     $ gcc -O3 fanotify.c -o jp-notify
+//     $ sudo ./jp-notify --help
+//   MacOS
+//     $ gcc -O3 -framework CoreServices jp-watch-fanotify.c -o jp-notify
+//     $ ./jp-notify --help
+#if !defined(__APPLE__)
+  #define _GNU_SOURCE// required for open_by_handle_at()
+  #include <sys/fanotify.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/fanotify.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
 #include <string.h>
-// Usage:
-//   $ gcc -O3 fanotify.c -o jp-notify
-//   $ sudo ./jp-notify
+#include <errno.h>
 
-void die(char *msg) {
-  perror(msg);
-  exit(1);
-}
+#if defined(__APPLE__)
+  #include <CoreServices/CoreServices.h>
+  #include <dispatch/dispatch.h>
+  char gPathBuffer[PATH_MAX];
+  static void callback(
+    ConstFSEventStreamRef streamRef,
+    void *clientCallBackInfo,
+    size_t numEvents,
+    void *eventPaths,
+    const FSEventStreamEventFlags eventFlags[],
+    const FSEventStreamEventId eventIds[]
+  ) {
+    for (int i=numEvents;i--;) {
+      CFStringGetCString(CFArrayGetValueAtIndex(eventPaths,i),gPathBuffer,sizeof(gPathBuffer),kCFStringEncodingUTF8);
+      // printf("%u %s%s\n",(unsigned int)eventFlags[i],gPathBuffer,eventFlags[i]&kFSEventStreamEventFlagItemIsDir?"/":"");
+      fputs(gPathBuffer, stdout);
+      if (eventFlags[i] & kFSEventStreamEventFlagItemIsDir) putchar('/');
+      putchar('\n');
+    }
+    fflush(stdout);
+  }
+#endif
+
+void die(char *msg) { perror(msg); fprintf(stderr, " (%d)\n", errno); exit(1); }
 
 int main(int argc, char *argv[]) {
-  // help
+  // print help, if requested
   for (int i = 1; i < argc; i++) {
     if (0 == strcmp("--help", argv[i])) {
       printf(
-"jp-notify v0.0.1\n"
+"jp-notify v0.8.0\n"
 "\n"
-"Usage: sudo jp-notify [ DIR1 | FILE1 ] [ DIR2 | FILE2 ] [ ... ]\n"
-"\n"
-"Arguments:\n"
-"  DIR | FILE        One or more directories to watch. If no directories are specified, the current working directory will be used.\n"
+"Usage: sudo jp-notify [PATH1] [PATH2] ...\n"
 "\n"
 "Description:\n"
-"  This command recursively watches the specified directories for changes to files and/or directories or their attributes. It prints the file/directory path and name when a change occurs. If no directories are specified, it will use the current working directory.\n"
+"  This command recursively watches the specified paths for changes to the files and/or directories they point to and their attributes. It prints the path when a change occurs. If no paths are specified it will use the current working directory.\n"
 "\n"
-"  Note: This command needs to be run as the superuser.\n"
+"  NOTE: Must run as superuser on Linux systems.\n"
       );
       return 0;
     }
   }
 
-  // if no args, set default path to cwd
-  char *cwd;
+  int paths_n = argc;// number of paths
+  char **paths = argv;// first path always ignored
+  printf("argc=%d\n", argc);
+
+  // deal with no supplied args
   if (1 == argc) {
-    cwd = (char *)malloc(PATH_MAX);
-    getcwd(cwd, PATH_MAX);
-    argc = 2; 
-    argv[1] = cwd;
+    paths_n = 2; 
+    paths = (char **)malloc(sizeof(char *) * paths_n);
+    paths[1] = ".";
   }
 
+  // convert all paths to absolute paths
+  char abs_path[PATH_MAX];
+  for (int i = 1; i < paths_n; i++) {
+    printf("paths[i]=%s", paths[i]);
+    if (realpath(paths[i], abs_path) == NULL) {
+      perror("realpath");
+      return 1;
+    }
+    paths[i] = (char *)malloc(strlen(abs_path) + 1);
+    strcpy(paths[i], abs_path);
+  }
+
+  // // for debugging
+  // for(int i=0; i<paths_n; i++) printf("paths[i]=%s\n", paths[i]);
+  // fflush(stdout);
+
+#if defined(__APPLE__)
+    // put paths params into Core Foundation (CF) Array
+    CFMutableArrayRef cf_paths = CFArrayCreateMutable(NULL, 0, NULL);
+    for (int i = 1; i < paths_n; i++) {
+      CFStringRef p = CFStringCreateWithCString(NULL, paths[i], kCFStringEncodingUTF8);
+      CFArrayAppendValue(cf_paths, p);
+      CFRelease(p);
+    }
+
+    // monitor the path recursively (and also keep track of new files/folders created within it)
+    FSEventStreamRef stream = FSEventStreamCreate(
+      NULL,// memory allocator (NULL=default)
+      &callback,// FSEventStreamCallback
+      NULL,// context
+      cf_paths,// paths to watch
+      kFSEventStreamEventIdSinceNow,// since when
+      0,// latency (seconds)
+      kFSEventStreamCreateFlagUseCFTypes// The framework will invoke your callback function with CF types rather than raw C types (i.e., a CFArrayRef of CFStringRefs, rather than a raw C array of raw C string pointers). See FSEventStreamCallback.
+      | kFSEventStreamCreateFlagFileEvents// Request file-level notifications. Your stream will receive events about individual files in the hierarchy you're watching instead of only receiving directory level notifications. Use this flag with care as it will generate significantly more events than without it.
+    );
+    dispatch_queue_t d = dispatch_queue_create("jp-watch", NULL);
+    FSEventStreamSetDispatchQueue(stream, d);
+    FSEventStreamStart(stream);
+
+    // sleep(10);
+    pause();// The pause function suspends program execution until a signal arrives whose action is either to execute a handler function, or to terminate the process.
+
+    // free memory and resources
+    dispatch_release(d);
+    CFRelease(cf_paths);
+    FSEventStreamStop(stream);
+    FSEventStreamInvalidate(stream);
+    FSEventStreamRelease(stream);
+#else
   // fanotify init
   int fd = fanotify_init(FAN_REPORT_FID, O_RDONLY);
   if (-1 == fd) die("Fanotify init failed");
@@ -63,7 +139,10 @@ int main(int argc, char *argv[]) {
     | FAN_EVENT_ON_CHILD// events for the immediate children of marked directories shall be created
     , AT_FDCWD
     , "/"// path to monitor
-  )) die("Fanotify mark failed");
+  )) {
+    if (1 == errno) fputs("Must run as superuser on Linux systems.\n", stderr);
+    die("Fanotify mark failed");
+  };
 
   // fanotify process events
   char b[8192];// byte buffer (docs recommend a big one e.g. 4096)
@@ -82,15 +161,16 @@ int main(int argc, char *argv[]) {
       int l = readlink(p, f, PATH_MAX);
       f[l] = '\0';
 
-      // filter by paths in argv
+      // filter by paths
       int i;
-      for (i = 1; i < argc; i++) {
-        if (strncmp(f, argv[i], strlen(argv[i])) == 0) break;// matching prefix found, so stop comparing
+      for (i = 1; i < paths_n; i++) {
+        if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
       }
-      if (argc != i) {// in the path set?
+      if (paths_n != i) {// in the path set?
         fputs(f, stdout);
         if (m->mask & FAN_ONDIR) putchar('/');
         putchar('\n');
+        fflush(stdout);
         //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
         //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
         //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
@@ -105,4 +185,12 @@ int main(int argc, char *argv[]) {
     }
   }
   die("Fanotify read failed");
+#endif
+
+  if (1 == argc) {
+    free(paths);
+    //free(cwd);
+  }
+
+  return 0;
 }
