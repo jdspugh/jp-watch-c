@@ -43,7 +43,7 @@ $ jp-watch README.md jp-watch-fanotify.c /var/www /tmp
 
 # Why?
 
-Written for ```jp-sync``` because ```fswatch``` and ```inotify-tools``` didn't produce consistent results across platforms.
+Written for ```jp-sync``` because ```fswatch``` and ```inotify-tools``` didn't produce consistent results across platforms. Also ```inotify-tools``` won't monitor newly added directories nor the files added to them.
 
 # Design Descisions
 
