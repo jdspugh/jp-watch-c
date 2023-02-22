@@ -1,9 +1,12 @@
 test*
 tmp*
 a.*
+jp-watch
 
 # VSC
 .vscode
 
 # MacOS
 .DS_Store
+*.dSYM
+*.xcodeproj

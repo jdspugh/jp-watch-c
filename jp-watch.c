@@ -1,10 +1,10 @@
 // Compile and Run
 //   Linux
-//     $ gcc -O3 fanotify.c -o jp-notify
-//     $ sudo ./jp-notify --help
+//     $ gcc -O3 jp-watch.c -o jp-watch
+//     $ sudo ./jp-watch --help
 //   MacOS
-//     $ gcc -O3 -framework CoreServices jp-watch-fanotify.c -o jp-notify
-//     $ ./jp-notify --help
+//     $ clang -O3 -framework CoreServices jp-watch.c -o jp-watch
+//     $ ./jp-watch --help
 #if !defined(__APPLE__)
   #define _GNU_SOURCE// required for open_by_handle_at()
   #include <sys/fanotify.h>
@@ -29,9 +29,11 @@
     const FSEventStreamEventFlags eventFlags[],
     const FSEventStreamEventId eventIds[]
   ) {
-    for (int i=numEvents;i--;) {
+    for (unsigned long i=numEvents;i--;) {
       CFStringGetCString(CFArrayGetValueAtIndex(eventPaths,i),gPathBuffer,sizeof(gPathBuffer),kCFStringEncodingUTF8);
-      // printf("%u %s%s\n",(unsigned int)eventFlags[i],gPathBuffer,eventFlags[i]&kFSEventStreamEventFlagItemIsDir?"/":"");
+#ifdef DEBUG
+      printf("%u %s%s\n",(unsigned int)eventFlags[i],gPathBuffer,eventFlags[i]&kFSEventStreamEventFlagItemIsDir?"/":"");
+#endif
       fputs(gPathBuffer, stdout);
       if (eventFlags[i] & kFSEventStreamEventFlagItemIsDir) putchar('/');
       putchar('\n');
@@ -49,12 +51,14 @@ int main(int argc, char *argv[]) {
       printf(
 "jp-notify v0.8.0\n"
 "\n"
-"Usage: sudo jp-notify [PATH1] [PATH2] ...\n"
+"Usage:\n"
+"jp-notify [PATH1] [PATH2] ...\n"
 "\n"
 "Description:\n"
-"  This command recursively watches the specified paths for changes to the files and/or directories they point to and their attributes. It prints the path when a change occurs. If no paths are specified it will use the current working directory.\n"
+"This command recursively watches the specified paths for changes to the files and/or directories they point to and their attributes. It prints the path when a change occurs. If no paths are specified it will use the current working directory.\n"
 "\n"
-"  NOTE: Must run as superuser on Linux systems.\n"
+"Note:\n"
+"Must run as superuser on Linux systems. This is a limitation of the Linux kernel's fanotify system.\n"
       );
       return 0;
     }
@@ -62,7 +66,9 @@ int main(int argc, char *argv[]) {
 
   int paths_n = argc;// number of paths
   char **paths = argv;// first path always ignored
+#ifdef DEBUG
   printf("argc=%d\n", argc);
+#endif
 
   // deal with no supplied args
   if (1 == argc) {
@@ -71,29 +77,28 @@ int main(int argc, char *argv[]) {
     paths[1] = ".";
   }
 
-  // convert all paths to absolute paths
-  char abs_path[PATH_MAX];
-  for (int i = 1; i < paths_n; i++) {
-    printf("paths[i]=%s", paths[i]);
-    if (realpath(paths[i], abs_path) == NULL) {
-      perror("realpath");
-      return 1;
+  {
+    // convert all paths to absolute paths (so we can handle path args like "../../")
+    char p[PATH_MAX];// absolute path
+    for (int i = 1; i < paths_n; i++) {
+      realpath(paths[i], p);// doesn't seem to return null ever
+      paths[i] = (char *)malloc(strlen(p) + 1);
+      strcpy(paths[i], p);
     }
-    paths[i] = (char *)malloc(strlen(abs_path) + 1);
-    strcpy(paths[i], abs_path);
   }
 
-  // // for debugging
-  // for(int i=0; i<paths_n; i++) printf("paths[i]=%s\n", paths[i]);
-  // fflush(stdout);
+#ifdef DEBUG
+  for (int i = 1; i < paths_n; i++) printf("paths[%d]=%s\n", i, paths[i]);
+  fflush(stdout);
+#endif
 
+  
 #if defined(__APPLE__)
     // put paths params into Core Foundation (CF) Array
-    CFMutableArrayRef cf_paths = CFArrayCreateMutable(NULL, 0, NULL);
+    CFMutableArrayRef cf_paths = CFArrayCreateMutable(kCFAllocatorDefault, paths_n, &kCFTypeArrayCallBacks);
     for (int i = 1; i < paths_n; i++) {
-      CFStringRef p = CFStringCreateWithCString(NULL, paths[i], kCFStringEncodingUTF8);
+      CFStringRef p = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
       CFArrayAppendValue(cf_paths, p);
-      CFRelease(p);
     }
 
     // monitor the path recursively (and also keep track of new files/folders created within it)
@@ -111,12 +116,15 @@ int main(int argc, char *argv[]) {
     FSEventStreamSetDispatchQueue(stream, d);
     FSEventStreamStart(stream);
 
-    // sleep(10);
+    // sleep(10);// for testing
     pause();// The pause function suspends program execution until a signal arrives whose action is either to execute a handler function, or to terminate the process.
 
     // free memory and resources
-    dispatch_release(d);
+    //   paths
+    for (int i = 0; i < paths_n - 1; i++) CFRelease(CFArrayGetValueAtIndex(cf_paths, i));
     CFRelease(cf_paths);
+    //   stream
+    dispatch_release(d);
     FSEventStreamStop(stream);
     FSEventStreamInvalidate(stream);
     FSEventStreamRelease(stream);
@@ -187,10 +195,7 @@ int main(int argc, char *argv[]) {
   die("Fanotify read failed");
 #endif
 
-  if (1 == argc) {
-    free(paths);
-    //free(cwd);
-  }
+  if (1 == argc) free(paths);
 
   return 0;
 }
