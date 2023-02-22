@@ -1,6 +1,11 @@
-# jp-watch
+<div align="center">
+  <img style="height:80px" src="https://jdspugh.github.io/jp-watch.png" />
+  <h1>jp-watch</h1>
+</div>
 
-Lightweight app to efficiently watch a set of files and/or directories recursively for changes on Linux and MacOS.
+# About
+
+Lightweight, cross platform app to efficiently watch a set of files and/or directories recursively for changes on Linux and MacOS.
 
 # Installation
 
@@ -43,7 +48,8 @@ $ jp-watch README.md jp-watch.c /var/www /tmp
 
 # Why?
 
-Written for ```jp-sync``` because ```fswatch``` and ```inotify-tools``` didn't produce consistent results across platforms.
+* ```inotify-tools``` is not available on MacOS
+* ```fswatch``` on Linux can't produce updates events using the ```--event Updated``` option when using the ```inotify_monitor``` monitor type
 
 # Design Descisions
 
