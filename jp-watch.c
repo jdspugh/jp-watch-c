@@ -1,10 +1,3 @@
-// Compile and Run
-//   Linux
-//     $ gcc -O3 jp-watch.c -o jp-watch
-//     $ sudo ./jp-watch --help
-//   MacOS
-//     $ clang -O3 -framework CoreServices jp-watch.c -o jp-watch
-//     $ ./jp-watch --help
 #if !defined(__APPLE__)
   #define _GNU_SOURCE// required for open_by_handle_at()
   #include <sys/fanotify.h>
@@ -81,7 +74,7 @@ int main(int argc, char *argv[]) {
     // convert all paths to absolute paths (so we can handle path args like "../../")
     char p[PATH_MAX];// absolute path
     for (int i = 1; i < paths_n; i++) {
-      realpath(paths[i], p);// doesn't seem to return null ever
+      (void)realpath(paths[i], p);// doesn't seem to return null ever
       paths[i] = (char *)malloc(strlen(p) + 1);
       strcpy(paths[i], p);
     }
@@ -92,7 +85,6 @@ int main(int argc, char *argv[]) {
   fflush(stdout);
 #endif
 
-  
 #if defined(__APPLE__)
     // put paths params into Core Foundation (CF) Array
     CFMutableArrayRef cf_paths = CFArrayCreateMutable(kCFAllocatorDefault, paths_n, &kCFTypeArrayCallBacks);
