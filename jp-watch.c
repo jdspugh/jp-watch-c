@@ -116,8 +116,11 @@ int main(int argc, char *argv[]) {
     FSEventStreamSetDispatchQueue(stream, d);
     FSEventStreamStart(stream);
 
-    // sleep(10);// for testing
+#ifdef DEBUG
+    sleep(10);// sleep so can see the results of "leaks" for detecting memory leaks
+#else
     pause();// The pause function suspends program execution until a signal arrives whose action is either to execute a handler function, or to terminate the process.
+#endif
 
     // free memory and resources
     //   paths
