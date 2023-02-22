@@ -48,7 +48,8 @@ $ jp-watch README.md jp-watch-fanotify.c /var/www /tmp
 
 # Why?
 
-Written for ```jp-sync``` because ```fswatch``` and ```inotify-tools``` didn't produce consistent results across platforms.
+* ```inotify-tools``` is not available on MacOS
+* ```fswatch``` on Linux can't produce updates events using the ```--event Updated``` option when using the ```inotify_monitor``` monitor type
 
 # Design Descisions
 
