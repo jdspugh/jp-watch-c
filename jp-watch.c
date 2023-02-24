@@ -162,7 +162,7 @@ void handle_args(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (0 == strcmp("--help", argv[i])) {
       printf(
-"jp-notify v0.8.0\n"
+"jp-notify v0.8.1\n"
 "\n"
 "Usage:\n"
 "jp-notify [PATH1] [PATH2] ...\n"
