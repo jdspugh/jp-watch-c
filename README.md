@@ -50,6 +50,7 @@ $ jp-watch README.md jp-watch.c /var/www /tmp
 
 * ```inotify-tools``` is not available on MacOS
 * ```fswatch``` on Linux can't produce updates events using the ```--event Updated``` option when using the ```inotify_monitor``` monitor type
+* Memory use is constant. Other tools require more memory the more paths they watch.
 
 # Design Descisions
 
