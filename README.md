@@ -61,3 +61,7 @@ After coding these tools in Rust, I decided to go for pure C. The main reason be
 Getting setup with C and the overall development flow was ultra smooth and fast. With Rust I had to install Cargo and it had to install some packages. Not a big deal but it was a smoother and faster experience with C.
 
 Performance is debatable between C,C++ and Rust but C seems to have an edge and it feels much like driving a manual car vs automatic.
+
+# Special Thanks to
+
+https://codereview.stackexchange.com
