@@ -1,4 +1,7 @@
-#if !defined(__APPLE__)
+#if defined(__APPLE__)
+  #include <CoreServices/CoreServices.h>
+  #include <dispatch/dispatch.h>
+#else
   #define _GNU_SOURCE// required for open_by_handle_at()
   #include <sys/fanotify.h>
 #endif
@@ -10,121 +13,81 @@
 #include <string.h>
 #include <errno.h>
 
+void die(char *msg) { fprintf(stderr, "%s: %s (%d).\n", msg, strerror(errno), errno); exit(1); }
+void die_memory() { die("Out of memory"); }
+
 #if defined(__APPLE__)
-  #include <CoreServices/CoreServices.h>
-  #include <dispatch/dispatch.h>
-  char gPathBuffer[PATH_MAX];
-  static void callback(
-    ConstFSEventStreamRef streamRef,
-    void *clientCallBackInfo,
-    size_t numEvents,
-    void *eventPaths,
-    const FSEventStreamEventFlags eventFlags[],
-    const FSEventStreamEventId eventIds[]
-  ) {
-    for (unsigned long i=numEvents;i--;) {
-      CFStringGetCString(CFArrayGetValueAtIndex(eventPaths,i),gPathBuffer,sizeof(gPathBuffer),kCFStringEncodingUTF8);
+// -----
+// APPLE
+// -----
+char gPathBuffer[PATH_MAX];
+
+static void callback(
+  ConstFSEventStreamRef streamRef,
+  void *clientCallBackInfo,
+  size_t numEvents,
+  void *eventPaths,
+  const FSEventStreamEventFlags eventFlags[],
+  const FSEventStreamEventId eventIds[]
+) {
+  for (unsigned long i=numEvents;i--;) {
+    CFStringGetCString(CFArrayGetValueAtIndex(eventPaths,i),gPathBuffer,sizeof(gPathBuffer),kCFStringEncodingUTF8);
 #ifdef DEBUG
-      printf("%u %s%s\n",(unsigned int)eventFlags[i],gPathBuffer,eventFlags[i]&kFSEventStreamEventFlagItemIsDir?"/":"");
+    printf("%u %s%s\n",(unsigned int)eventFlags[i],gPathBuffer,eventFlags[i]&kFSEventStreamEventFlagItemIsDir?"/":"");
 #endif
-      fputs(gPathBuffer, stdout);
-      if (eventFlags[i] & kFSEventStreamEventFlagItemIsDir) putchar('/');
-      putchar('\n');
-    }
-    fflush(stdout);
+    fputs(gPathBuffer, stdout);
+    if (eventFlags[i] & kFSEventStreamEventFlagItemIsDir) putchar('/');
+    putchar('\n');
   }
-#endif
-
-void die(char *msg) { perror(msg); fprintf(stderr, " (%d)\n", errno); exit(1); }
-
-int main(int argc, char *argv[]) {
-  // print help, if requested
-  for (int i = 1; i < argc; i++) {
-    if (0 == strcmp("--help", argv[i])) {
-      printf(
-"jp-notify v0.8.0\n"
-"\n"
-"Usage:\n"
-"jp-notify [PATH1] [PATH2] ...\n"
-"\n"
-"Description:\n"
-"This command recursively watches the specified paths for changes to the files and/or directories they point to and their attributes. It prints the path when a change occurs. If no paths are specified it will use the current working directory.\n"
-"\n"
-"Note:\n"
-"Must run as superuser on Linux systems. This is a limitation of the Linux kernel's fanotify system.\n"
-      );
-      return 0;
-    }
-  }
-
-  int paths_n = argc;// number of paths
-  char **paths = argv;// first path always ignored
-#ifdef DEBUG
-  printf("argc=%d\n", argc);
-#endif
-
-  // deal with no supplied args
-  if (1 == argc) {
-    paths_n = 2; 
-    paths = (char **)malloc(sizeof(char *) * paths_n);
-    paths[1] = ".";
-  }
-
-  {
-    // convert all paths to absolute paths (so we can handle path args like "../../")
-    char p[PATH_MAX];// absolute path
-    for (int i = 1; i < paths_n; i++) {
-      (void)realpath(paths[i], p);// doesn't seem to return null ever
-      paths[i] = (char *)malloc(strlen(p) + 1);
-      strcpy(paths[i], p);
-    }
-  }
-
-#ifdef DEBUG
-  for (int i = 1; i < paths_n; i++) printf("paths[%d]=%s\n", i, paths[i]);
   fflush(stdout);
-#endif
+}
 
-#if defined(__APPLE__)
-    // put paths params into Core Foundation (CF) Array
-    CFMutableArrayRef cf_paths = CFArrayCreateMutable(kCFAllocatorDefault, paths_n, &kCFTypeArrayCallBacks);
-    for (int i = 1; i < paths_n; i++) {
-      CFStringRef p = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
-      CFArrayAppendValue(cf_paths, p);
-    }
+void fsstream_process_events(int paths_n, char *paths[]) {
+  // put paths params into Core Foundation (CF) Array
+  CFMutableArrayRef cf_paths = CFArrayCreateMutable(kCFAllocatorDefault, paths_n, &kCFTypeArrayCallBacks);
+  for (uint i = 1; i < paths_n; i++) {
+    CFStringRef p = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
+    CFArrayAppendValue(cf_paths, p);
+  }
 
-    // monitor the path recursively (and also keep track of new files/folders created within it)
-    FSEventStreamRef stream = FSEventStreamCreate(
-      NULL,// memory allocator (NULL=default)
-      &callback,// FSEventStreamCallback
-      NULL,// context
-      cf_paths,// paths to watch
-      kFSEventStreamEventIdSinceNow,// since when
-      0,// latency (seconds)
-      kFSEventStreamCreateFlagUseCFTypes// The framework will invoke your callback function with CF types rather than raw C types (i.e., a CFArrayRef of CFStringRefs, rather than a raw C array of raw C string pointers). See FSEventStreamCallback.
-      | kFSEventStreamCreateFlagFileEvents// Request file-level notifications. Your stream will receive events about individual files in the hierarchy you're watching instead of only receiving directory level notifications. Use this flag with care as it will generate significantly more events than without it.
-    );
-    dispatch_queue_t d = dispatch_queue_create("jp-watch", NULL);
-    FSEventStreamSetDispatchQueue(stream, d);
-    FSEventStreamStart(stream);
+  // monitor the path recursively (and also keep track of new files/folders created within it)
+  FSEventStreamRef stream = FSEventStreamCreate(
+    NULL,// memory allocator (NULL=default)
+    &callback,// FSEventStreamCallback
+    NULL,// context
+    cf_paths,// paths to watch
+    kFSEventStreamEventIdSinceNow,// since when
+    0,// latency (seconds)
+    kFSEventStreamCreateFlagUseCFTypes// The framework will invoke your callback function with CF types rather than raw C types (i.e., a CFArrayRef of CFStringRefs, rather than a raw C array of raw C string pointers). See FSEventStreamCallback.
+    | kFSEventStreamCreateFlagFileEvents// Request file-level notifications. Your stream will receive events about individual files in the hierarchy you're watching instead of only receiving directory level notifications. Use this flag with care as it will generate significantly more events than without it.
+  );
+  dispatch_queue_t d = dispatch_queue_create("jp-watch", NULL);
+  FSEventStreamSetDispatchQueue(stream, d);
+  FSEventStreamStart(stream);
 
 #ifdef DEBUG
-    sleep(10);// sleep so can see the results of "leaks" for detecting memory leaks
+  sleep(10);// sleep so can see the results of "leaks" for detecting memory leaks
 #else
-    pause();// The pause function suspends program execution until a signal arrives whose action is either to execute a handler function, or to terminate the process.
+  pause();// The pause function suspends program execution until a signal arrives whose action is either to execute a handler function, or to terminate the process.
 #endif
 
-    // free memory and resources
-    //   paths
-    for (int i = 0; i < paths_n - 1; i++) CFRelease(CFArrayGetValueAtIndex(cf_paths, i));
-    CFRelease(cf_paths);
-    //   stream
-    dispatch_release(d);
-    FSEventStreamStop(stream);
-    FSEventStreamInvalidate(stream);
-    FSEventStreamRelease(stream);
+  // free memory and resources
+  //   paths
+  for (uint i = 0; i < paths_n - 1; i++) CFRelease(CFArrayGetValueAtIndex(cf_paths, i));
+  CFRelease(cf_paths);
+  //   stream
+  dispatch_release(d);
+  FSEventStreamStop(stream);
+  FSEventStreamInvalidate(stream);
+  FSEventStreamRelease(stream);
+}
+// -----
 #else
-  // fanotify init
+// -----
+// Linux
+// -----
+void fanotify_process_events(int paths_n, char *paths[]) {
+    // fanotify init
   int fd = fanotify_init(FAN_REPORT_FID, O_RDONLY);
   if (-1 == fd) die("Fanotify init failed");
   
@@ -143,15 +106,17 @@ int main(int argc, char *argv[]) {
     , AT_FDCWD
     , "/"// path to monitor
   )) {
-    if (1 == errno) fputs("Must run as superuser on Linux systems.\n", stderr);
-    die("Fanotify mark failed");
+    die((1 == errno) ? "Must run as superuser on Linux systems" : "Fanotify mark failed");
   };
 
-  // fanotify process events
   char b[8192];// byte buffer (docs recommend a big one e.g. 4096)
   char p[PATH_MAX];// /proc/self/fd/%d path
   char f[PATH_MAX];// filename
+#ifdef __ssize_t_defined
   ssize_t n;
+#else
+  int n;// some non-POSTIX Linux versions (e.g. ChromeOS) use int
+#endif
   while ((n = read(fd, &b, sizeof(b))) > 0) {
     struct fanotify_event_metadata *m = (struct fanotify_event_metadata *)b;
     while (FAN_EVENT_OK(m, n)) {
@@ -187,7 +152,69 @@ int main(int argc, char *argv[]) {
       m = FAN_EVENT_NEXT(m, n);
     }
   }
-  die("Fanotify read failed");
+  die("Fanotify mark failed");
+}
+// -----
+#endif
+
+void handle_args(int argc, char *argv[]) {
+  // print help, if requested
+  for (int i = 1; i < argc; i++) {
+    if (0 == strcmp("--help", argv[i])) {
+      printf(
+"jp-notify v0.8.0\n"
+"\n"
+"Usage:\n"
+"jp-notify [PATH1] [PATH2] ...\n"
+"\n"
+"Description:\n"
+"This command recursively watches the specified paths for changes to the files and/or directories they point to and their attributes. It prints the path when a change occurs. If no paths are specified it will use the current working directory.\n"
+"\n"
+"Note:\n"
+"Must run as superuser on Linux systems. This is a limitation of the Linux kernel's fanotify system.\n"
+      );
+      exit(0);
+    }
+  }
+}
+
+int main(int argc, char *argv[]) {
+  handle_args(argc, argv);
+
+  uint paths_n = argc;// number of paths
+  char **paths = argv;// first path always ignored
+#ifdef DEBUG
+  printf("argc=%d\n", argc);
+#endif
+
+  // deal with no supplied args
+  if (1 == argc) {
+    paths_n = 2; 
+    paths = malloc(sizeof(*paths) * paths_n);
+    if (!paths) die_memory();
+    paths[1] = ".";
+  }
+
+  {
+    // convert all paths to absolute paths (so we can handle path args like "../../")
+    char p[PATH_MAX];// absolute path
+    for (uint i = 1; i < paths_n; i++) {
+      (void)realpath(paths[i], p);// doesn't seem to return null ever
+      paths[i] = malloc(strlen(p) + 1);// TODO: replace malloc+strcpy with strdup
+      if (!paths[i]) die_memory();
+      strcpy(paths[i], p);
+    }
+  }
+
+#ifdef DEBUG
+  for (uint i = 1; i < paths_n; i++) printf("paths[%d]=%s\n", i, paths[i]);
+  fflush(stdout);
+#endif
+
+#if defined(__APPLE__)
+  fsstream_process_events(paths_n, paths);
+#else
+  fanotify_process_events(paths_n, paths);
 #endif
 
   if (1 == argc) free(paths);
