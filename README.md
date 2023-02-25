@@ -1,5 +1,5 @@
 <div align="center">
-  <img style="height:80px" src="https://jdspugh.github.io/jp-watch.png" />
+  <img style="height:80px" src="https://jdspugh.github.io/image/jp-watch/jp-watch-logo.png" />
   <h1>jp-watch</h1>
 </div>
 
