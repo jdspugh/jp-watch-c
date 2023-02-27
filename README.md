@@ -52,4 +52,4 @@ Read my [blog post](https://jdspugh.github.io/2023/02/23/jp-watch-c.html) for th
 
 # Special Thanks to
 
-<https://codereview.stackexchange.com>
+[Code Review Stack Exchange](https://codereview.stackexchange.com/questions/283521/minimalist-recursive-file-watcher-macos-linux)
