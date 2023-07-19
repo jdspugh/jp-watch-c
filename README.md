@@ -13,7 +13,7 @@ MacOS
 ```
 $ cd ~
 $ git clone https://github.com/jdspugh/jp-watch-c.git
-$ cd jp-watch
+$ cd jp-watch-c
 $ clang -O3 -framework CoreServices -o jp-watch jp-watch.c
 $ sudo mv jp-watch /usr/local/bin
 $ jp-watch --help
@@ -23,7 +23,7 @@ Linux
 ```
 $ cd ~
 $ git clone https://github.com/jdspugh/jp-watch-c.git
-$ cd jp-watch
+$ cd jp-watch-c
 $ gcc -O3 -o jp-watch jp-watch.c
 $ sudo mv jp-watch /usr/local/bin
 $ sudo jp-watch --help
