@@ -12,7 +12,7 @@ Lightweight, cross platform app to efficiently watch a set of files and/or direc
 MacOS
 ```
 $ cd ~
-$ git clone https://github.com/jdspugh/jp-watch.git
+$ git clone https://github.com/jdspugh/jp-watch-c.git
 $ cd jp-watch
 $ clang -O3 -framework CoreServices -o jp-watch jp-watch.c
 $ sudo mv jp-watch /usr/local/bin
@@ -22,7 +22,7 @@ $ jp-watch --help
 Linux
 ```
 $ cd ~
-$ git clone https://github.com/jdspugh/jp-watch.git
+$ git clone https://github.com/jdspugh/jp-watch-c.git
 $ cd jp-watch
 $ gcc -O3 -o jp-watch jp-watch.c
 $ sudo mv jp-watch /usr/local/bin
