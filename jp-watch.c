@@ -211,17 +211,24 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // print paths
 #ifdef DEBUG
-  for (uint i = 1; i < paths_n; i++) printf("paths[%d]=%s\n", i, paths[i]);
+  for (uint i = 1; i < paths_n; i++) {
+    printf("paths[%d]=%s\n", i, paths[i]);
+  }
   fflush(stdout);
 #endif
-
+  
 #if defined(__APPLE__)
   fsstream_process_events(paths_n, paths);
 #else
   fanotify_process_events(paths_n, paths);
 #endif
 
+  // free paths
+#ifdef DEBUG
+  for (uint i = paths_n-1; i--;) free(paths[i]);
+#endif
   if (1 == argc) free(paths);
 
   return 0;
