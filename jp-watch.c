@@ -225,10 +225,8 @@ int main(int argc, char *argv[]) {
   fanotify_process_events(paths_n, paths);
 #endif
 
-  // free paths
-#ifdef DEBUG
+  // free paths memory
   for (uint i = paths_n-1; i--;) free(paths[i]);
-#endif
   if (1 == argc) free(paths);
 
   return 0;
