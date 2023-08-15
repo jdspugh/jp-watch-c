@@ -207,9 +207,8 @@ int main(int argc, char *argv[]) {
     char p[PATH_MAX];// absolute path
     for (uint i = 1; i < paths_n; i++) {
       (void)realpath(paths[i], p);// doesn't seem to return null ever
-      paths[i] = malloc(strlen(p) + 1);// TODO: replace malloc+strcpy with strdup
+      paths[i] = strdup(p);
       if (!paths[i]) die_memory();
-      strcpy(paths[i], p);
     }
   }
 
