@@ -117,6 +117,7 @@ void fanotify_process_events(int paths_n, char *paths[]) {
 #else
   int n;// some non-POSTIX Linux versions (e.g. ChromeOS) use int
 #endif
+  const char *annotation = " (deleted)";
   while ((n = read(fd, &b, sizeof(b))) > 0) {
     struct fanotify_event_metadata *m = (struct fanotify_event_metadata *)b;
     while (FAN_EVENT_OK(m, n)) {
@@ -135,9 +136,15 @@ void fanotify_process_events(int paths_n, char *paths[]) {
         if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
       }
       if (paths_n != i) {// in the path set?
+        // remove any fanotify annotations
+        const char *found = strstr(f, annotation);
+        if (found) *found = '\0'; // Terminate the string at the start of the annotation
+
+        // output path
         fputs(f, stdout);
         if (m->mask & FAN_ONDIR) putchar('/');
         putchar('\n');
+        
         //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
         //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
         //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
