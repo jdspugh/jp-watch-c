@@ -138,7 +138,6 @@ void fanotify_process_events(int paths_n, char *paths[]) {
         fputs(f, stdout);
         if (m->mask & FAN_ONDIR) putchar('/');
         putchar('\n');
-        fflush(stdout);
         //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
         //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
         //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
@@ -151,6 +150,7 @@ void fanotify_process_events(int paths_n, char *paths[]) {
 
       m = FAN_EVENT_NEXT(m, n);
     }
+    fflush(stdout);
   }
   die("Fanotify mark failed");
 }
