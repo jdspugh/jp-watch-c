@@ -46,9 +46,10 @@ void fsstream_process_events(int paths_n, char *paths[]) {
   // put paths params into Core Foundation (CF) Array
   CFMutableArrayRef cf_paths = CFArrayCreateMutable(kCFAllocatorDefault, paths_n, &kCFTypeArrayCallBacks);
   for (uint i = 1; i < paths_n; i++) {
-    CFStringRef p = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
+    CFStringRef p = CFStringCreateWithCString(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
     CFArrayAppendValue(cf_paths, p);
-  }
+    CFRelease(p);
+  }  
 
   // monitor the path recursively (and also keep track of new files/folders created within it)
   FSEventStreamRef stream = FSEventStreamCreate(
