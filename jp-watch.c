@@ -122,11 +122,11 @@ void fanotify_process_events(int paths_n, char *paths[]) {
     struct fanotify_event_metadata *m = (struct fanotify_event_metadata *)b;
     while (FAN_EVENT_OK(m, n)) {
       struct fanotify_event_info_fid *fid = (struct fanotify_event_info_fid *)(m + 1);
-      // get fd from handle
-      int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);
 
-      // get filename from fd
-      sprintf(p, "/proc/self/fd/%d", event_fd);
+      // get filename (from fid handle)
+      int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);// get fd from handle
+      close(event_fd);// free fd
+      sprintf(p, "/proc/self/fd/%d", event_fd);// get filename from fd
       int l = readlink(p, f, PATH_MAX);
       f[l] = '\0';
 
