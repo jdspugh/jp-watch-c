@@ -137,7 +137,7 @@ void fanotify_process_events(int paths_n, char *paths[]) {
       }
       if (paths_n != i) {// in the path set?
         // remove any fanotify annotations
-        const char *found = strstr(f, annotation);
+        char *found = strstr(f, annotation);
         if (found) *found = '\0'; // Terminate the string at the start of the annotation
 
         // output path
