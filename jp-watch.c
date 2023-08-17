@@ -46,10 +46,9 @@ void fsstream_process_events(int paths_n, char *paths[]) {
   // put paths params into Core Foundation (CF) Array
   CFMutableArrayRef cf_paths = CFArrayCreateMutable(kCFAllocatorDefault, paths_n, &kCFTypeArrayCallBacks);
   for (uint i = 1; i < paths_n; i++) {
-    CFStringRef p = CFStringCreateWithCString(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
+    CFStringRef p = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault, paths[i], kCFStringEncodingUTF8, kCFAllocatorDefault);
     CFArrayAppendValue(cf_paths, p);
-    CFRelease(p);
-  }  
+  }
 
   // monitor the path recursively (and also keep track of new files/folders created within it)
   FSEventStreamRef stream = FSEventStreamCreate(
@@ -118,15 +117,15 @@ void fanotify_process_events(int paths_n, char *paths[]) {
 #else
   int n;// some non-POSTIX Linux versions (e.g. ChromeOS) use int
 #endif
-  const char *annotation = " (deleted)";
   while ((n = read(fd, &b, sizeof(b))) > 0) {
     struct fanotify_event_metadata *m = (struct fanotify_event_metadata *)b;
     while (FAN_EVENT_OK(m, n)) {
-      // get filename from event
       struct fanotify_event_info_fid *fid = (struct fanotify_event_info_fid *)(m + 1);
-      int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);// get fd from handle
-      sprintf(p, "/proc/self/fd/%d", event_fd);// get filename from fd
-      close(event_fd);// free fd
+      // get fd from handle
+      int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);
+
+      // get filename from fd
+      sprintf(p, "/proc/self/fd/%d", event_fd);
       int l = readlink(p, f, PATH_MAX);
       f[l] = '\0';
 
@@ -136,15 +135,10 @@ void fanotify_process_events(int paths_n, char *paths[]) {
         if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
       }
       if (paths_n != i) {// in the path set?
-        // remove any fanotify annotations
-        char *found = strstr(f, annotation);
-        if (found) *found = '\0'; // Terminate the string at the start of the annotation
-
-        // output path
         fputs(f, stdout);
         if (m->mask & FAN_ONDIR) putchar('/');
         putchar('\n');
-        
+        fflush(stdout);
         //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
         //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
         //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
@@ -157,7 +151,6 @@ void fanotify_process_events(int paths_n, char *paths[]) {
 
       m = FAN_EVENT_NEXT(m, n);
     }
-    fflush(stdout);
   }
   die("Fanotify mark failed");
 }
@@ -207,27 +200,23 @@ int main(int argc, char *argv[]) {
     char p[PATH_MAX];// absolute path
     for (uint i = 1; i < paths_n; i++) {
       (void)realpath(paths[i], p);// doesn't seem to return null ever
-      paths[i] = strdup(p);
+      paths[i] = malloc(strlen(p) + 1);// TODO: replace malloc+strcpy with strdup
       if (!paths[i]) die_memory();
+      strcpy(paths[i], p);
     }
   }
 
-  // print paths
 #ifdef DEBUG
-  for (uint i = 1; i < paths_n; i++) {
-    printf("paths[%d]=%s\n", i, paths[i]);
-  }
+  for (uint i = 1; i < paths_n; i++) printf("paths[%d]=%s\n", i, paths[i]);
   fflush(stdout);
 #endif
-  
+
 #if defined(__APPLE__)
   fsstream_process_events(paths_n, paths);
 #else
   fanotify_process_events(paths_n, paths);
 #endif
 
-  // free paths memory
-  for (uint i = paths_n-1; i--;) free(paths[i]);
   if (1 == argc) free(paths);
 
   return 0;
