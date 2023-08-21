@@ -26,7 +26,7 @@ $ git clone https://github.com/jdspugh/jp-watch-c.git
 $ cd jp-watch-c
 $ gcc -O3 -o jp-watch jp-watch.c
 $ sudo mv jp-watch /usr/local/bin
-$ sudo jp-watch --help
+$ jp-watch --help
 ```
 
 # Examples
