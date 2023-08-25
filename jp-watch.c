@@ -145,47 +145,48 @@ void fanotify_process_events(int paths_n, char *paths[]) {
       int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);// get fd from handle
 // printf("event_fd=%d", event_fd);
 // printf("\n");
-// if (-1 != event_fd) {// -1 returned if the file was deleted before this code could be reached
+      if (-1 != event_fd) {// -1 returned if the file was deleted before this code could be reached
       f[0]='\0';// if info_type is -1 it returns the last filename unless the string is cleared here 
       sprintf(p, "/proc/self/fd/%d", event_fd);// get filename from fd
       ssize_t l = readlink(p, f, PATH_MAX);
 // printf("l=%ld, ",l);
-      if (l>1 || !(m->mask & FAN_ATTRIB)) {// (1) l Can be -1 sometimes when processing file deletion events and these should be filtered out. (2) Don't process attribute changes on "/" since these events are erroneously returned upon any file deletion events before the either the file or file's parent directory is returned.
-        f[l] = '\0';// null terminate to convert to C string for printing
+        if (l>1 || !(m->mask & FAN_ATTRIB)) {// don't process attribute changes on "/" since these events are erroneously returned upon any file deletion events before the either the file or file's parent directory is returned.
+          f[l] = '\0';// null terminate to convert to C string for printing
 
-        // filter by paths
-        int i;
-        for (i = 1; i < paths_n; i++) {
-          if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
-        }
-        if (paths_n != i) {// in the path set?
-          //// remove any fanotify "deleted" annotation
-          //char *found = strstr(f, d);
-          ////if (found) *found = '\0';// terminate the string at the start of the annotation
+          // filter by paths
+          int i;
+          for (i = 1; i < paths_n; i++) {
+            if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
+          }
+          if (paths_n != i) {// in the path set?
+            //// remove any fanotify "deleted" annotation
+            //char *found = strstr(f, d);
+            ////if (found) *found = '\0';// terminate the string at the start of the annotation
 
-          // output path
-          fputs(f, stdout);
-          if (m->mask & FAN_ONDIR) putchar('/');
-          putchar('\n');
-          //fflush(stdout);
-          //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
-          //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
-          //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
-          //if (m->mask & FAN_CREATE) puts("FAN_CREATE");
-          //if (m->mask & FAN_DELETE) puts("FAN_DELETE");
-          //if (m->mask & FAN_MOVE) puts("FAN_MOVE");
-          //if (m->mask & FAN_ONDIR) { puts("/"); puts("FAN_ONDIR"); } else { putchar('\n'); }
-          //if (m->mask & FAN_EVENT_ON_CHILD) puts("FAN_EVENT_ON_CHILD");
-        }
-      }
+            // output path
+            fputs(f, stdout);
+            if (m->mask & FAN_ONDIR) putchar('/');
+            putchar('\n');
+            //fflush(stdout);
+            //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
+            //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
+            //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
+            //if (m->mask & FAN_CREATE) puts("FAN_CREATE");
+            //if (m->mask & FAN_DELETE) puts("FAN_DELETE");
+            //if (m->mask & FAN_MOVE) puts("FAN_MOVE");
+            //if (m->mask & FAN_ONDIR) { puts("/"); puts("FAN_ONDIR"); } else { putchar('\n'); }
+            //if (m->mask & FAN_EVENT_ON_CHILD) puts("FAN_EVENT_ON_CHILD");
+          }// if
+        }// if
+      }// if
       close(event_fd);// free fd
 
       m = FAN_EVENT_NEXT(m, n);// return pointer to the start of the next event in buffer b
-    }
+    }// while
     fflush(stdout);// flush output after all events in buffer b are read
-  }
+  }// while
   die("Fanotify mark failed");
-}
+}// function
 // -----
 #endif
 
