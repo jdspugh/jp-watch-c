@@ -71,15 +71,15 @@ void fsstream_process_events(int paths_n, char *paths[]) {
   pause();// The pause function suspends program execution until a signal arrives whose action is either to execute a handler function, or to terminate the process.
 #endif
 
-  // free memory and resources
-  //   paths
-  for (uint i = 0; i < paths_n - 1; i++) CFRelease(CFArrayGetValueAtIndex(cf_paths, i));
-  CFRelease(cf_paths);
-  //   stream
-  dispatch_release(d);
-  FSEventStreamStop(stream);
-  FSEventStreamInvalidate(stream);
-  FSEventStreamRelease(stream);
+  //// free memory and resources
+  ////   paths
+  //for (uint i = 0; i < paths_n - 1; i++) CFRelease(CFArrayGetValueAtIndex(cf_paths, i));
+  //CFRelease(cf_paths);
+  ////   stream
+  //dispatch_release(d);
+  //FSEventStreamStop(stream);
+  //FSEventStreamInvalidate(stream);
+  //FSEventStreamRelease(stream);
 }
 // -----
 #else
@@ -101,10 +101,10 @@ void fanotify_process_events(int paths_n, char *paths[]) {
     | FAN_CREATE// since Linux 5.1
     | FAN_DELETE// since Linux 5.1
     | FAN_MOVE// since Linux 5.1, = FAN_MOVED_FROM | FAN_MOVED_TO
-    | FAN_ONDIR// require in order to create events when subdirectory entries are modified (i.e., mkdir/rmdir)
+    | FAN_ONDIR// required in order to create events when subdirectory entries are modified (i.e., mkdir/rmdir)
     | FAN_EVENT_ON_CHILD// events for the immediate children of marked directories shall be created
     , AT_FDCWD
-    , "/"// path to monitor
+    , "/"// path to monitor (path not used in whole filesystem mode i.e. with FAN_MARK_FILESYSTEM)
   )) {
     die((1 == errno) ? "Must run as superuser on Linux systems" : "Fanotify mark failed");
   };
@@ -117,40 +117,72 @@ void fanotify_process_events(int paths_n, char *paths[]) {
 #else
   int n;// some non-POSTIX Linux versions (e.g. ChromeOS) use int
 #endif
+  //const char *d = " (deleted)";// fanotify "deleted" annotation
   while ((n = read(fd, &b, sizeof(b))) > 0) {
     struct fanotify_event_metadata *m = (struct fanotify_event_metadata *)b;
-    while (FAN_EVENT_OK(m, n)) {
+    while (FAN_EVENT_OK(m, n)) {// more events in buffer b to process?
+      // TODO: consider optimising by removing duplicate paths generated within this while loop (rather than sending them to the stdout and expecting the user to filter them out)
+
+      // get filename from event
       struct fanotify_event_info_fid *fid = (struct fanotify_event_info_fid *)(m + 1);
-      // get fd from handle
-      int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);
 
-      // get filename from fd
-      sprintf(p, "/proc/self/fd/%d", event_fd);
-      int l = readlink(p, f, PATH_MAX);
-      f[l] = '\0';
+// //printf("fsid: type=%d, val={%d, %d}\n", fid->fsid.type, fid->fsid.val[0], fid->fsid.val[1]);
+// //printf("file_handle: ");
+// //for (int i = 0; i < handle_bytes; i++) {
+// //  printf("%02x ", fid->file_handle[i]);
+// //}
+// //printf("(fid=%d,%d)", fid->hdr, fid->fsid);
+// printf("fid->hdr.info_type=%d, ", fid->hdr.info_type);
+// printf("fid->hdr.pad=%d, ", fid->hdr.pad);
+// printf("fid->hdr.len=%d, ", fid->hdr.len);
+// //printf("fid->fsid=%d,%d, ", fid->fsid.val[0], fid->fsid.val[1]);// filesystem identifier
 
-      // filter by paths
-      int i;
-      for (i = 1; i < paths_n; i++) {
-        if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
+// struct file_handle *handle = (struct file_handle *)fid->handle;
+// printf("fid->handle.handle_bytes=%d, ", handle->handle_bytes);
+// printf("fid->handle.handle_type=%d, ", handle->handle_type);
+// //printf("fid->handle.handle_bytes=%s, ", fid->handle.handle_bytes);
+
+      int event_fd = open_by_handle_at(AT_FDCWD, (struct file_handle *)fid->handle, O_RDONLY);// get fd from handle
+// printf("event_fd=%d", event_fd);
+// printf("\n");
+// if (-1 != event_fd) {// -1 returned if the file was deleted before this code could be reached
+      f[0]='\0';// if info_type is -1 it returns the last filename unless the string is cleared here 
+      sprintf(p, "/proc/self/fd/%d", event_fd);// get filename from fd
+      ssize_t l = readlink(p, f, PATH_MAX);
+// printf("l=%ld, ",l);
+      if (l>1 || !(m->mask & FAN_ATTRIB)) {// (1) l Can be -1 sometimes when processing file deletion events and these should be filtered out. (2) Don't process attribute changes on "/" since these events are erroneously returned upon any file deletion events before the either the file or file's parent directory is returned.
+        f[l] = '\0';// null terminate to convert to C string for printing
+
+        // filter by paths
+        int i;
+        for (i = 1; i < paths_n; i++) {
+          if (strncmp(f, paths[i], strlen(paths[i])) == 0) break;// matching prefix found, so stop comparing
+        }
+        if (paths_n != i) {// in the path set?
+          //// remove any fanotify "deleted" annotation
+          //char *found = strstr(f, d);
+          ////if (found) *found = '\0';// terminate the string at the start of the annotation
+
+          // output path
+          fputs(f, stdout);
+          if (m->mask & FAN_ONDIR) putchar('/');
+          putchar('\n');
+          //fflush(stdout);
+          //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
+          //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
+          //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
+          //if (m->mask & FAN_CREATE) puts("FAN_CREATE");
+          //if (m->mask & FAN_DELETE) puts("FAN_DELETE");
+          //if (m->mask & FAN_MOVE) puts("FAN_MOVE");
+          //if (m->mask & FAN_ONDIR) { puts("/"); puts("FAN_ONDIR"); } else { putchar('\n'); }
+          //if (m->mask & FAN_EVENT_ON_CHILD) puts("FAN_EVENT_ON_CHILD");
+        }
       }
-      if (paths_n != i) {// in the path set?
-        fputs(f, stdout);
-        if (m->mask & FAN_ONDIR) putchar('/');
-        putchar('\n');
-        fflush(stdout);
-        //if (m->mask & FAN_ACCESS) puts("FAN_ACCESS");
-        //if (m->mask & FAN_MODIFY) puts("FAN_MODIFY");
-        //if (m->mask & FAN_ATTRIB) puts("FAN_ATTRIB");
-        //if (m->mask & FAN_CREATE) puts("FAN_CREATE");
-        //if (m->mask & FAN_DELETE) puts("FAN_DELETE");
-        //if (m->mask & FAN_MOVE) puts("FAN_MOVE");
-        //if (m->mask & FAN_ONDIR) { puts("/"); puts("FAN_ONDIR"); } else { putchar('\n'); }
-        //if (m->mask & FAN_EVENT_ON_CHILD) puts("FAN_EVENT_ON_CHILD");
-      }
+      close(event_fd);// free fd
 
-      m = FAN_EVENT_NEXT(m, n);
+      m = FAN_EVENT_NEXT(m, n);// return pointer to the start of the next event in buffer b
     }
+    fflush(stdout);// flush output after all events in buffer b are read
   }
   die("Fanotify mark failed");
 }
@@ -162,7 +194,7 @@ void handle_args(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (0 == strcmp("--help", argv[i])) {
       printf(
-"jp-notify v0.8.1\n"
+"jp-notify v0.8.2\n"
 "\n"
 "Usage:\n"
 "jp-notify [PATH1] [PATH2] ...\n"
@@ -200,24 +232,26 @@ int main(int argc, char *argv[]) {
     char p[PATH_MAX];// absolute path
     for (uint i = 1; i < paths_n; i++) {
       (void)realpath(paths[i], p);// doesn't seem to return null ever
-      paths[i] = malloc(strlen(p) + 1);// TODO: replace malloc+strcpy with strdup
+      paths[i] = strdup(p);
       if (!paths[i]) die_memory();
-      strcpy(paths[i], p);
     }
   }
 
 #ifdef DEBUG
+  // print paths
   for (uint i = 1; i < paths_n; i++) printf("paths[%d]=%s\n", i, paths[i]);
   fflush(stdout);
 #endif
 
 #if defined(__APPLE__)
-  fsstream_process_events(paths_n, paths);
+  fsstream_process_events(paths_n, paths);// never returns
 #else
-  fanotify_process_events(paths_n, paths);
+  fanotify_process_events(paths_n, paths);// never returns
 #endif
 
-  if (1 == argc) free(paths);
+  //// free paths memory
+  //for (uint i = paths_n-1; i--;) free(paths[i]);
+  //if (1 == argc) free(paths);
 
   return 0;
 }
