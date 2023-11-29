@@ -7,6 +7,13 @@
 
 Lightweight, cross platform app to efficiently watch a set of files and/or directories recursively for changes on Linux and MacOS.
 
+File and directory creation, deletion and attribute changes are reported. Output is one absolute path per line e.g.:
+```
+/home/user/new-file
+/home/user/new-dir/
+/tmp/file5349872
+```
+
 # Installation
 
 MacOS
