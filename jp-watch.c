@@ -185,10 +185,10 @@ void handle_args(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (0 == strcmp("--help", argv[i])) {
       printf(
-"jp-notify v0.9.0\n"
+"jp-watch v0.9.0\n"
 "\n"
 "Usage:\n"
-"jp-notify [PATH1] [PATH2] ...\n"
+"jp-watch [PATH1] [PATH2] ...\n"
 "\n"
 "Description:\n"
 "This command recursively watches the specified paths for changes to the files and/or directories they point to and their attributes. It prints the path when a change occurs. If no paths are specified it will use the current working directory.\n"
