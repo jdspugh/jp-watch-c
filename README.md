@@ -53,6 +53,10 @@ Watch a few different files and directories with a combination of relative and a
 $ jp-watch README.md jp-watch.c /var/www /tmp
 ```
 
+# Limitations
+
+`jp-watch` is not designed to watch a large number (hundreds or thousands) of different directories. The more files and directories you pass as parameters, the more cpu and memory the app will consume with a difficulty of O(1). It would be better to watch the containing directories of the files and directories you want to watch instead.
+
 # Articles
 
 Read my [blog post](https://jdspugh.github.io/2023/02/23/jp-watch-c.html) for the full details on this tools, it's design and implementation.
